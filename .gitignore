@@ -1,0 +1,13 @@
+# Qt / C++
+build-*/
+*.user
+*.o
+*.obj
+
+# Arduino
+build/
+bin/
+libraries/
+
+.vscode
+builds
