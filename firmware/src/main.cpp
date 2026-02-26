@@ -1,90 +1,77 @@
 #include <Arduino.h>
-#include <ArduinoJson.h>
 #include <SimpleSerialShell.h>
-#include <MFRC522DriverSPI.h>
-#include <MFRC522DriverPinSimple.h>
-#include <MFRC522Debug.h>
-#include <MFRC522v2.h>
+#include <MFRC522.h>
+#include <SPI.h>
 
-//PFP
-void printHex(byte* buffer, byte bufferSize);
-
-const String serial_separator = "///////////////////////////////////////////////////";
-
-static MFRC522::MIFARE_Key key_default;  
-
-MFRC522DriverPinSimple cs_pin{SS};
-MFRC522DriverSPI spi_driver{cs_pin};
-MFRC522 reader{spi_driver};
+MFRC522 mfrc522(10, 9); // SS pin 10, RST pin 9
+MFRC522::MIFARE_Key key = { .keyByte = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF} }; // Default key for MIFARE cards
 
 void setup() {
-
     //Serial
     Serial.begin(115200);
+    SPI.begin();
 
-    //Init default MIFARE Key
-    for (size_t i = 0; i < MFRC522Constants::MF_KEY_SIZE; i++)
-    {
-        key_default.keyByte[i] = 0xFF;
+    mfrc522.PCD_Init();
+    if(!mfrc522.PCD_PerformSelfTest()) {
+        Serial.println("Self test failed");
+    }else{
+        Serial.println("Self test passed"); 
     }
-
-    reader.PCD_Init();
-    if(reader.PCD_Init()) Serial.println("Success in init PCD Device");
-
-    
-    MFRC522Debug::PCD_DumpVersionToSerial(reader,Serial);
-
-    Serial.println(serial_separator);
-    Serial.println("Performing selftest of the PCD...");
-    if(reader.PCD_PerformSelfTest() == true){
-        Serial.println("PCD Version : " + reader.PCD_GetVersion());
-    }
-    Serial.println(serial_separator);
+    mfrc522.PCD_Init();
+    delay(500);
+    mfrc522.PCD_DumpVersionToSerial();
+    // mfrc522.PCD_SetAntennaGain(mfrc522.RxGain_max);
 
 }
 
 void loop() {
     //TODO check serial if a shell command is present
-    
-    if(!reader.PICC_IsNewCardPresent()) return;
-    if(!reader.PICC_ReadCardSerial()) return;
-
-    MFRC522::StatusCode status;
-    status = reader.PCD_Authenticate(MFRC522::PICC_Command::PICC_CMD_MF_AUTH_KEY_A,4,&key_default,&(reader.uid));
-    if(status != MFRC522::StatusCode::STATUS_OK){
-        Serial.println("ERROR in AUTH process : ERROR : " + status);
-        reader.PCD_StopCrypto1();
+    if(!mfrc522.PICC_IsNewCardPresent() && !mfrc522.PICC_ReadCardSerial()) {
         return;
+    }else{
+        Serial.println("Card detected");
+        Serial.print("UID:");
+        for (byte i = 0; i < mfrc522.uid.size; i++) {
+            Serial.print(mfrc522.uid.uidByte[i] < 0x10 ? " 0" : " ");
+            Serial.print(mfrc522.uid.uidByte[i], HEX);
+        }
+        Serial.println();
+    }
+    // mfrc522.PCD_Authenticate(mfrc522.PICC_CMD_MF_AUTH_KEY_A, 1, &key, &(mfrc522.uid));
+
+    MFRC522::StatusCode status = mfrc522.PCD_Authenticate(mfrc522.PICC_CMD_MF_AUTH_KEY_A, 1, &key, &(mfrc522.uid));
+    delay(20);
+    while(status == mfrc522.STATUS_TIMEOUT && mfrc522.PICC_IsNewCardPresent() && mfrc522.PICC_ReadCardSerial()) {
+        Serial.println("Authentication timed out, retrying...");
+        status = mfrc522.PCD_Authenticate(mfrc522.PICC_CMD_MF_AUTH_KEY_A, 1, &key, &(mfrc522.uid));
+        delay(20);
     }
 
-    Serial.println("Reading...");
+
+    delay(100);
+    if(status != mfrc522.STATUS_OK) {
+        Serial.print("Authentication failed: ");
+        Serial.println(mfrc522.GetStatusCodeName(status));
+    }else{
+        Serial.println("Authentication successful");
+    }
+
     byte buffer[18] = {0};
-
-    status = reader.MIFARE_Read(4,buffer,(byte*)18);
-    printHex(buffer,18);
-    memset(buffer,0,sizeof(byte));
-
-    status = reader.MIFARE_Read(5,buffer,(byte*)18);
-    printHex(buffer,18);
-    memset(buffer,0,sizeof(byte));
-
-    status = reader.MIFARE_Read(6,buffer,(byte*)18);
-    printHex(buffer,18);
-    memset(buffer,0,sizeof(byte));
-
-    status = reader.MIFARE_Read(7,buffer,(byte*)18);
-    printHex(buffer,18);
-    memset(buffer,0,sizeof(byte));
-
-    Serial.println("Reading done.");
-
-    reader.PCD_StopCrypto1();
-}
-void printHex(byte* buffer, byte bufferSize) {
-    for (byte i = 0; i < bufferSize; i++) {
-        char hex[3]; // Platz für 2 Zeichen + Null-Terminator
-        sprintf(hex, "%02X", buffer[i]);
-        Serial.print(hex);
+    byte bufferSize = 18;
+    status = mfrc522.MIFARE_Read(0, buffer, &bufferSize);
+    if(status != mfrc522.STATUS_OK) {
+        Serial.print("Reading failed: ");
+        Serial.println(mfrc522.GetStatusCodeName(status));
+    }else{
+        Serial.print("Data in block 1:");
+        for (byte i = 0; i < 16; i++) {
+            Serial.print(buffer[i] < 0x10 ? " 0" : " ");
+            Serial.print(buffer[i], HEX);
+        }
+        Serial.println();
+        mfrc522.PCD_StopCrypto1();
     }
-    Serial.println(); // Zeilenumbruch für das Protokoll
+
+    delay(200);
+
 }
