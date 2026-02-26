@@ -1,5 +1,6 @@
 # Diagrams
 
+## Sequence Diagram for a typical program flow
 ```mermaid
 
 sequenceDiagram
@@ -23,5 +24,22 @@ loop main_loop()
     Arduino ->> PCD: ReadBlock(s)()
     PCD ->> Arduino: ReadBlock(s)_Response()
 end
+
+```
+
+## State Machine
+
+```mermaid
+stateDiagram
+
+    [*] --> SCAN
+    %% CHECK --> CHECK
+    SCAN --> AUTH
+    %% AUTH --> AUTH
+    AUTH --> READ
+    AUTH --> WRITE
+    READ --> UNAUTH
+    WRITE --> UNAUTH
+    UNAUTH --> SCAN
 
 ```
