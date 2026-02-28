@@ -1,5 +1,33 @@
 # Diagrams
 
+## Class Diagram
+```mermaid
+classDiagram
+
+
+    class NexusReader{
+    <<Singleton>>
+    NexusReader()
+    + ~NexusReader()
+
+    +readBlock()
+    +authenticate()
+
+    - MFRC522 _mfrc522
+    }
+
+    class NexusShell{
+    
+    }
+    class MFRC522{
+        <<library>>
+    }
+
+    NexusShell ..> NexusReader : depends on
+    NexusReader ..> MFRC522 : uses
+
+```
+
 ## Sequence Diagram for a typical program flow
 ```mermaid
 
